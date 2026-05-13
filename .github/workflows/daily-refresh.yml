@@ -13,38 +13,112 @@ jobs:
     steps:
       - name: Refresh today
         run: |
+          set -u
           echo "==== /api/matches/today?refresh=true ===="
-          curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
+          HTTP_CODE=$(curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
             -o today.json \
-            "${{ secrets.SIMBET_API_BASE }}/api/matches/today?refresh=true"
+            -w "%{http_code}" \
+            "${{ secrets.SIMBET_API_BASE }}/api/matches/today?refresh=true")
 
-          python3 - <<'PY'
-          import json
-          with open("today.json") as f:
-              d = json.load(f)
-          print("count=", d.get("count"))
-          print("bet_history_saved=", d.get("bet_history_saved"))
-          print("historical_data_saved=", d.get("historical_data_saved"))
-          print("quota=", d.get("quota"))
+          echo "HTTP status: $HTTP_CODE"
+          echo "----- raw body (first 1500 chars) -----"
+          head -c 1500 today.json || true
+          echo
+          echo "----- end body -----"
+
+          python3 - "$HTTP_CODE" <<'PY'
+          import json, sys
+          http_code = sys.argv[1]
+          try:
+              with open("today.json") as f:
+                  body = f.read()
+          except Exception as e:
+              print(f"::error::Cannot read today.json: {e}")
+              sys.exit(1)
+
+          if http_code != "200":
+              print(f"::error::HTTP status {http_code} (expected 200)")
+              print("Body:", body[:500])
+              sys.exit(1)
+
+          try:
+              d = json.loads(body)
+          except Exception as e:
+              print(f"::error::Invalid JSON: {e}")
+              print("Body:", body[:500])
+              sys.exit(1)
+
+          if isinstance(d, dict) and "detail" in d:
+              print(f"::error::API returned error detail: {d['detail']}")
+              sys.exit(1)
+
+          count = d.get("count")
+          if count is None:
+              print(f"::error::Missing 'count' in API response")
+              print("Keys:", list(d.keys()))
+              sys.exit(1)
+
+          print(f"count={count}")
+          print(f"bet_history_saved={d.get('bet_history_saved')}")
+          print(f"historical_data_saved={d.get('historical_data_saved')}")
+          print(f"quota={d.get('quota')}")
+          print(f"source={d.get('source')}")
           PY
 
       - name: Refresh tomorrow
         run: |
+          set -u
           echo "==== /api/matches/tomorrow?refresh=true ===="
-          curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
+          HTTP_CODE=$(curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
             -o tomorrow.json \
-            "${{ secrets.SIMBET_API_BASE }}/api/matches/tomorrow?refresh=true"
+            -w "%{http_code}" \
+            "${{ secrets.SIMBET_API_BASE }}/api/matches/tomorrow?refresh=true")
 
-          python3 - <<'PY'
-          import json
-          with open("tomorrow.json") as f:
-              d = json.load(f)
-          print("count=", d.get("count"))
-          print("bet_history_saved=", d.get("bet_history_saved"))
-          print("historical_data_saved=", d.get("historical_data_saved"))
-          print("quota=", d.get("quota"))
+          echo "HTTP status: $HTTP_CODE"
+          echo "----- raw body (first 1500 chars) -----"
+          head -c 1500 tomorrow.json || true
+          echo
+          echo "----- end body -----"
+
+          python3 - "$HTTP_CODE" <<'PY'
+          import json, sys
+          http_code = sys.argv[1]
+          try:
+              with open("tomorrow.json") as f:
+                  body = f.read()
+          except Exception as e:
+              print(f"::error::Cannot read tomorrow.json: {e}")
+              sys.exit(1)
+
+          if http_code != "200":
+              print(f"::error::HTTP status {http_code} (expected 200)")
+              print("Body:", body[:500])
+              sys.exit(1)
+
+          try:
+              d = json.loads(body)
+          except Exception as e:
+              print(f"::error::Invalid JSON: {e}")
+              print("Body:", body[:500])
+              sys.exit(1)
+
+          if isinstance(d, dict) and "detail" in d:
+              print(f"::error::API returned error detail: {d['detail']}")
+              sys.exit(1)
+
+          count = d.get("count")
+          if count is None:
+              print(f"::error::Missing 'count' in API response")
+              print("Keys:", list(d.keys()))
+              sys.exit(1)
+
+          print(f"count={count}")
+          print(f"bet_history_saved={d.get('bet_history_saved')}")
+          print(f"historical_data_saved={d.get('historical_data_saved')}")
+          print(f"quota={d.get('quota')}")
+          print(f"source={d.get('source')}")
           PY
 
       - name: Upload artifacts
