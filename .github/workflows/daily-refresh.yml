@@ -15,6 +15,7 @@ jobs:
         run: |
           echo "==== /api/matches/today?refresh=true ===="
           curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
             -o today.json \
             "${{ secrets.SIMBET_API_BASE }}/api/matches/today?refresh=true"
 
@@ -32,6 +33,7 @@ jobs:
         run: |
           echo "==== /api/matches/tomorrow?refresh=true ===="
           curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
             -o tomorrow.json \
             "${{ secrets.SIMBET_API_BASE }}/api/matches/tomorrow?refresh=true"
 
