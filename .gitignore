@@ -1,0 +1,13 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+.cache/
+cache/
+models/
+*.pkl
+*.joblib
+historique_data*.json
+reports/
+backup*/
+.DS_Store

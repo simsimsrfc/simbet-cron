@@ -1,0 +1,56 @@
+name: SIMBET — Daily refresh J/J+1
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Refresh today
+        run: |
+          echo "==== /api/matches/today?refresh=true ===="
+          curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
+            -o today.json \
+            "${{ secrets.SIMBET_API_BASE }}/api/matches/today?refresh=true"
+
+          python3 - <<'PY'
+          import json
+          with open("today.json") as f:
+              d = json.load(f)
+          print("count=", d.get("count"))
+          print("bet_history_saved=", d.get("bet_history_saved"))
+          print("historical_data_saved=", d.get("historical_data_saved"))
+          print("quota=", d.get("quota"))
+          PY
+
+      - name: Refresh tomorrow
+        run: |
+          echo "==== /api/matches/tomorrow?refresh=true ===="
+          curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
+            -o tomorrow.json \
+            "${{ secrets.SIMBET_API_BASE }}/api/matches/tomorrow?refresh=true"
+
+          python3 - <<'PY'
+          import json
+          with open("tomorrow.json") as f:
+              d = json.load(f)
+          print("count=", d.get("count"))
+          print("bet_history_saved=", d.get("bet_history_saved"))
+          print("historical_data_saved=", d.get("historical_data_saved"))
+          print("quota=", d.get("quota"))
+          PY
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-logs-${{ github.run_id }}
+          path: |
+            today.json
+            tomorrow.json
+          retention-days: 7
