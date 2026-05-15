@@ -1,0 +1,94 @@
+name: SIMBET — Results sync (post-match)
+
+on:
+  # Toutes les heures entre 19:00 et 04:00 UTC inclus (21h Paris → 06h Paris)
+  # Heures où les matchs finissent typiquement en Europe + Japon/Australie.
+  schedule:
+    - cron: "0 19,20,21,22,23,0,1,2,3,4 * * *"
+  # Permet déclenchement manuel via UI GitHub Actions
+  workflow_dispatch:
+    inputs:
+      max_api_calls:
+        description: "Plafond appels API (par défaut 50)"
+        required: false
+        default: "50"
+      days_back:
+        description: "Fenêtre rétrospective en jours (par défaut 7)"
+        required: false
+        default: "7"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Sync results
+        env:
+          MAX_API_CALLS: ${{ github.event.inputs.max_api_calls || '50' }}
+          DAYS_BACK:     ${{ github.event.inputs.days_back || '7' }}
+        run: |
+          set -u
+          echo "==== POST /api/matches/sync-results ===="
+          echo "max_api_calls=$MAX_API_CALLS  days_back=$DAYS_BACK"
+
+          HTTP_CODE=$(curl -sS --max-time 600 --retry 1 --retry-delay 15 \
+            -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -o sync_report.json \
+            -w "%{http_code}" \
+            "${{ secrets.SIMBET_API_BASE }}/api/matches/sync-results?max_api_calls=$MAX_API_CALLS&days_back=$DAYS_BACK")
+
+          echo "HTTP status: $HTTP_CODE"
+          echo "----- raw body (first 2000 chars) -----"
+          head -c 2000 sync_report.json || true
+          echo
+          echo "----- end body -----"
+
+          python3 - "$HTTP_CODE" <<'PY'
+          import json, sys
+          http_code = sys.argv[1]
+          try:
+              with open("sync_report.json") as f:
+                  body = f.read()
+          except Exception as e:
+              print(f"::error::Cannot read sync_report.json: {e}")
+              sys.exit(1)
+
+          if http_code != "200":
+              print(f"::error::HTTP status {http_code} (expected 200)")
+              print("Body:", body[:500])
+              sys.exit(1)
+
+          try:
+              d = json.loads(body)
+          except Exception as e:
+              print(f"::error::Invalid JSON: {e}")
+              print("Body:", body[:500])
+              sys.exit(1)
+
+          if isinstance(d, dict) and "detail" in d:
+              print(f"::error::API returned error detail: {d['detail']}")
+              sys.exit(1)
+
+          if "error" in d:
+              print(f"::warning::sync returned error: {d['error']}")
+
+          # Résumé lisible dans les logs Actions
+          print(f"processed={d.get('processed')}")
+          print(f"api_calls_used={d.get('api_calls_used')}")
+          print(f"resolved_final={d.get('resolved_final')}")
+          print(f"resolved_terminal={d.get('resolved_terminal')}")
+          print(f"resolved_intermediate={d.get('resolved_intermediate')}")
+          print(f"errors_count={d.get('errors_count')}")
+          quota = d.get("quota_after") or {}
+          print(f"quota_remaining={quota.get('remaining')} / {quota.get('daily_limit')}")
+          PY
+
+      - name: Upload artifact (sync report)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-results-${{ github.run_id }}
+          path: sync_report.json
+          retention-days: 14
