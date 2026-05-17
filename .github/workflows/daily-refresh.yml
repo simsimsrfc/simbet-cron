@@ -10,6 +10,9 @@ on:
     - cron: "25 10 * * *"
     - cron: "33 10 * * *"
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   refresh:
@@ -22,14 +25,29 @@ jobs:
         run: |
           set -u
           PARIS_HM=$(TZ="Europe/Paris" date +%H:%M)
-          echo "Paris time now: $PARIS_HM"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          PARIS_HOUR=$(TZ="Europe/Paris" date +%H)
+          PARIS_DATE=$(TZ="Europe/Paris" date +%Y-%m-%d)
+          EVENT="${{ github.event_name }}"
+          echo "Event: $EVENT — Paris: $PARIS_DATE $PARIS_HM"
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
             echo "Manual dispatch — proceeding."
             echo "skip=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          PARIS_HOUR=$(TZ="Europe/Paris" date +%H)
-          PARIS_DATE=$(TZ="Europe/Paris" date +%Y-%m-%d)
+
+          if [ "$EVENT" = "push" ]; then
+            if [ "$PARIS_DATE" = "2026-05-17" ]; then
+              echo "Push on catch-up day — proceeding."
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "Push outside catch-up day — skipping."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          # schedule
           if [ "$PARIS_HOUR" = "00" ]; then
             echo "Paris hour is 00 — proceeding (daily slot)."
             echo "skip=false" >> "$GITHUB_OUTPUT"
