@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: "1 22 * * *"
     - cron: "1 23 * * *"
+    # One-time catch-up for 2026-05-17 — 12:05 Paris (= 10:05 UTC).
+    # Fires daily but gated to the exact date below; no-op afterwards.
+    - cron: "5 10 * * *"
   workflow_dispatch:
 
 jobs:
@@ -24,11 +27,15 @@ jobs:
             exit 0
           fi
           PARIS_HOUR=$(TZ="Europe/Paris" date +%H)
+          PARIS_DATE=$(TZ="Europe/Paris" date +%Y-%m-%d)
           if [ "$PARIS_HOUR" = "00" ]; then
-            echo "Paris hour is 00 — proceeding."
+            echo "Paris hour is 00 — proceeding (daily slot)."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          elif [ "$PARIS_DATE" = "2026-05-17" ] && [ "$PARIS_HOUR" = "12" ]; then
+            echo "Paris date=$PARIS_DATE hour=12 — one-time catch-up, proceeding."
             echo "skip=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Paris hour is $PARIS_HOUR (not 00) — skipping to avoid double refresh."
+            echo "Paris date=$PARIS_DATE hour=$PARIS_HOUR — skipping (no matching slot)."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
