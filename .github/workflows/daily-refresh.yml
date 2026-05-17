@@ -7,6 +7,7 @@ on:
     # One-time catch-up for 2026-05-17 — 12:05 Paris (= 10:05 UTC).
     # Fires daily but gated to the exact date below; no-op afterwards.
     - cron: "5 10 * * *"
+    - cron: "25 10 * * *"
   workflow_dispatch:
 
 jobs:
