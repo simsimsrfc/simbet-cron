@@ -2,7 +2,8 @@ name: SIMBET — Daily refresh J/J+1
 
 on:
   schedule:
-    - cron: "0 8 * * *"
+    - cron: "1 22 * * *"
+    - cron: "1 23 * * *"
   workflow_dispatch:
 
 jobs:
@@ -11,7 +12,28 @@ jobs:
     timeout-minutes: 90
 
     steps:
+      - name: Gate — only run at 00:01 Paris time (skip duplicate cron)
+        id: gate
+        run: |
+          set -u
+          PARIS_HM=$(TZ="Europe/Paris" date +%H:%M)
+          echo "Paris time now: $PARIS_HM"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual dispatch — proceeding."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PARIS_HOUR=$(TZ="Europe/Paris" date +%H)
+          if [ "$PARIS_HOUR" = "00" ]; then
+            echo "Paris hour is 00 — proceeding."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Paris hour is $PARIS_HOUR (not 00) — skipping to avoid double refresh."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Refresh today
+        if: steps.gate.outputs.skip != 'true'
         run: |
           set -u
           echo "==== /api/matches/today?refresh=true ===="
@@ -67,14 +89,15 @@ jobs:
           PY
 
       - name: Refresh tomorrow
+        if: steps.gate.outputs.skip != 'true'
         run: |
           set -u
-          echo "==== /api/matches/tomorrow?refresh=true ===="
+          echo "==== /api/matches/tomorrow?refresh=true&limit=30 ===="
           HTTP_CODE=$(curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
             -o tomorrow.json \
             -w "%{http_code}" \
-            "${{ secrets.SIMBET_API_BASE }}/api/matches/tomorrow?refresh=true")
+            "${{ secrets.SIMBET_API_BASE }}/api/matches/tomorrow?refresh=true&limit=30")
 
           echo "HTTP status: $HTTP_CODE"
           echo "----- raw body (first 1500 chars) -----"
@@ -122,7 +145,7 @@ jobs:
           PY
 
       - name: Upload artifacts
-        if: always()
+        if: always() && steps.gate.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: refresh-logs-${{ github.run_id }}
