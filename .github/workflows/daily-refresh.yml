@@ -59,6 +59,34 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Health check — confirm target backend
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          set -u
+          BASE="${{ secrets.SIMBET_API_BASE }}"
+          # Affiche un fingerprint non sensible de la base URL (longueur + hash court).
+          # Les secrets sont automatiquement masqués par GitHub si on les echo directement.
+          BASE_LEN=${#BASE}
+          BASE_HASH=$(printf '%s' "$BASE" | shasum -a 256 | cut -c1-12)
+          echo "SIMBET_API_BASE length=$BASE_LEN sha256_12=$BASE_HASH"
+
+          echo "==== GET /api/health ===="
+          HTTP_CODE=$(curl -sS --max-time 30 \
+            -o health.json \
+            -w "%{http_code}" \
+            "$BASE/api/health" || echo "000")
+
+          echo "HTTP status: $HTTP_CODE"
+          echo "----- body (first 1000 chars) -----"
+          head -c 1000 health.json || true
+          echo
+          echo "----- end body -----"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::/api/health returned $HTTP_CODE — wrong base URL or backend down."
+            exit 1
+          fi
+
       - name: Refresh today
         if: steps.gate.outputs.skip != 'true'
         run: |
