@@ -8,6 +8,7 @@ on:
     # Fires daily but gated to the exact date below; no-op afterwards.
     - cron: "5 10 * * *"
     - cron: "25 10 * * *"
+    - cron: "33 10 * * *"
   workflow_dispatch:
 
 jobs:
