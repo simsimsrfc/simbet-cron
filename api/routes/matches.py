@@ -177,7 +177,8 @@ def _check_refresh_auth(x_cron_secret: Optional[str]) -> None:
         raise HTTPException(403, "Forbidden: invalid or missing X-Cron-Secret header")
 
 
-def _load_matches_for_date(target_date: _date, refresh: bool = False) -> dict:
+def _load_matches_for_date(target_date: _date, refresh: bool = False,
+                           max_matches: Optional[int] = None) -> dict:
     """Charge ou calcule les analyses d'une date sans appel API si refresh=False."""
     cached = None if refresh else load_daily_cache(target_date)
     if cached:
@@ -205,7 +206,10 @@ def _load_matches_for_date(target_date: _date, refresh: bool = False) -> dict:
         raise HTTPException(503, "Modèle ML non entraîné.")
 
     try:
-        raw = fetch_all_by_date(target_date)
+        if max_matches is not None:
+            raw = fetch_all_by_date(target_date, max_matches=max_matches)
+        else:
+            raw = fetch_all_by_date(target_date)
     except Exception as e:
         log.error("fetch_all_by_date(%s) : %s", target_date.isoformat(), e)
         raise HTTPException(502, f"Erreur API-Football : {e}")
@@ -402,11 +406,17 @@ def _find_match_in_sample_sources(fid: str) -> Optional[dict]:
 @router.get("/today", summary="Matchs du jour")
 async def list_matches_today(
     refresh: bool = Query(False, description="Si True : refetch via API-Football"),
+    limit:   Optional[int] = Query(None, ge=1, le=200,
+                                   description="Plafond matchs analysés (optionnel)"),
     x_cron_secret: Optional[str] = Header(default=None, alias="X-Cron-Secret"),
 ):
     if refresh:
         _check_refresh_auth(x_cron_secret)
-    return _load_matches_for_date(_paris_today(), refresh=refresh)
+    return _load_matches_for_date(
+        _paris_today(),
+        refresh=refresh,
+        max_matches=limit,
+    )
 
 
 # ══════════════════════════════════════════════════════════════
@@ -415,11 +425,17 @@ async def list_matches_today(
 @router.get("/tomorrow", summary="Matchs de demain")
 async def list_matches_tomorrow(
     refresh: bool = Query(False, description="Si True : refetch via API-Football"),
+    limit:   int  = Query(30, ge=1, le=200,
+                          description="Plafond matchs analysés (default 30 pour J+1)"),
     x_cron_secret: Optional[str] = Header(default=None, alias="X-Cron-Secret"),
 ):
     if refresh:
         _check_refresh_auth(x_cron_secret)
-    return _load_matches_for_date(_paris_today() + timedelta(days=1), refresh=refresh)
+    return _load_matches_for_date(
+        _paris_today() + timedelta(days=1),
+        refresh=refresh,
+        max_matches=limit,
+    )
 
 
 # ══════════════════════════════════════════════════════════════

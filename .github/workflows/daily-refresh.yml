@@ -91,12 +91,12 @@ jobs:
         if: steps.gate.outputs.skip != 'true'
         run: |
           set -u
-          echo "==== /api/matches/today?refresh=true ===="
+          echo "==== /api/matches/today?refresh=true&limit=20 ===="
           HTTP_CODE=$(curl -sS --max-time 1800 --retry 2 --retry-delay 30 \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
             -o today.json \
             -w "%{http_code}" \
-            "${{ secrets.SIMBET_API_BASE }}/api/matches/today?refresh=true")
+            "${{ secrets.SIMBET_API_BASE }}/api/matches/today?refresh=true&limit=20")
 
           echo "HTTP status: $HTTP_CODE"
           echo "----- raw body (first 1500 chars) -----"
